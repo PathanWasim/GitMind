@@ -1,0 +1,59 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: gitmind-backend
+    env_file:
+      - ./backend/.env.example
+    environment:
+      DATABASE_URL: postgresql+psycopg://gitmind:gitmind@postgres:5432/gitmind
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CHROMA_PERSIST_DIRECTORY: /app/data/chroma
+      DATA_DIRECTORY: /app/data
+      REPOSITORY_STORAGE_DIRECTORY: /app/data/repos
+      REPOSITORY_STATE_FILE: /app/data/state/repositories.json
+      BACKEND_CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend-data:/app/data
+    depends_on:
+      - postgres
+      - redis
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: gitmind-frontend
+    env_file:
+      - ./frontend/.env.example
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: gitmind-postgres
+    environment:
+      POSTGRES_USER: gitmind
+      POSTGRES_PASSWORD: gitmind
+      POSTGRES_DB: gitmind
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: gitmind-redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  backend-data:
+  postgres-data:
