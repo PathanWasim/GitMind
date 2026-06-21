@@ -207,11 +207,10 @@ class IndexingService:
                             "language": file_path.suffix.lstrip(".").lower() or "text",
                         }
                     )
-                    if start_index + CHUNK_LINES >= len(lines):
-                        break
             return chunks
 
         return await run_in_threadpool(chunk_files)
+
 
     async def _index_chunks(
         self,

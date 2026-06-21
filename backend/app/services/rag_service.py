@@ -27,7 +27,6 @@ class RAGService:
             raise HTTPException(status_code=404, detail="Repository not found.")
 
     async def retrieve_context(self, repository_id: UUID, query: str) -> list[dict[str, object]]:
-        await self.ensure_repository_exists(repository_id)
         collection = self.chroma_client.get_collection(self._collection_name(repository_id))
         collection_size = collection.count()
         if collection_size == 0:
@@ -44,6 +43,7 @@ class RAGService:
             distance = distances[index] if index < len(distances) else None
             context.append({"content": document, "metadata": metadata, "distance": distance})
         return context
+
 
     def generate_answer(self, payload: ChatStreamRequest) -> AsyncIterator[str]:
         return self._stream_answer(payload)

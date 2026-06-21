@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import re
 import shutil
 from pathlib import Path
 
 from git import Repo
 from starlette.concurrency import run_in_threadpool
+
+CLONE_TIMEOUT_SECONDS = 120
 
 
 class GitHubService:
@@ -14,7 +17,15 @@ class GitHubService:
         destination.parent.mkdir(parents=True, exist_ok=True)
         if destination.exists():
             await run_in_threadpool(shutil.rmtree, destination)
-        await run_in_threadpool(Repo.clone_from, repository_url, destination, depth=1)
+        try:
+            await asyncio.wait_for(
+                run_in_threadpool(Repo.clone_from, repository_url, destination, depth=1),
+                timeout=CLONE_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError as exc:
+            raise TimeoutError(
+                f"Cloning {repository_url} timed out after {CLONE_TIMEOUT_SECONDS}s."
+            ) from exc
         return destination
 
     async def validate_repository(self, repository_url: str) -> bool:
@@ -28,3 +39,4 @@ class GitHubService:
 
 def get_github_service() -> GitHubService:
     return GitHubService()
+
