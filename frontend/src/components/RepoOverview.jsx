@@ -66,7 +66,11 @@ function StatCard({ value, label, small }) {
       onMouseLeave={onLeave}
       style={{ transition:'transform .4s var(--ease), border-color .3s, box-shadow .3s' }}
     >
-      <div className="app-stat-val" style={small ? { fontSize:16, letterSpacing:0, paddingTop:6 } : {}}>
+      <div className="app-stat-val" style={{
+        background: 'linear-gradient(135deg, var(--amber-glow) 0%, var(--plasma-gold) 60%, var(--bio-bright) 100%)',
+        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+        ...(small ? { fontSize:16, letterSpacing:0, paddingTop:6 } : {}),
+      }}>
         {displayed}
       </div>
       <div className="app-stat-lbl">{label}</div>
@@ -136,7 +140,7 @@ function FolderGroup({ name, files }) {
     <div>
       <div className="app-folder-hdr" onClick={() => setOpen(!open)}>
         <span className="app-folder-arrow">{open ? '▾' : '▸'}</span>
-        <span className="app-folder-name" style={{ color: name === '(root)' ? 'var(--w3)' : 'var(--indigo-3)' }}>{name}</span>
+        <span className="app-folder-name" style={{ color: name === '(root)' ? 'var(--w3)' : 'var(--bio-bright)' }}>{name}</span>
         <span className="app-folder-badge">{files.length}</span>
       </div>
       {open && (
@@ -185,7 +189,7 @@ function TypewriterReadme({ text }) {
   return (
     <pre ref={ref} className="app-readme">
       {shown}
-      {!done && <span style={{ display:'inline-block', width:6, height:12, background:'var(--indigo-2)', verticalAlign:'middle', animation:'blink .7s step-end infinite' }} />}
+      {!done && <span style={{ display:'inline-block', width:6, height:12, background:'var(--amber-glow)', verticalAlign:'middle', animation:'blink .7s step-end infinite' }} />}
     </pre>
   );
 }

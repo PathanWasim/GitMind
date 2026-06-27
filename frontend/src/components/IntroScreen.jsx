@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 
 const BOOT = [
-  '> INITIALIZING NEURAL ENGINE...',
-  '> LOADING SENTENCE TRANSFORMERS...',
-  '> CONNECTING TO GROQ / LLAMA-3.3-70B...',
-  '> VECTOR DATABASE ONLINE...',
-  '> SYSTEM READY.',
+  { text: '> INITIALIZING BIOLUMINESCENT FORGE...',  color: 'var(--amber-glow)' },
+  { text: '> LOADING SENTENCE TRANSFORMERS...',       color: 'var(--w2)' },
+  { text: '> CONNECTING TO GROQ / LLAMA-3.3-70B...', color: 'var(--bio-bright)' },
+  { text: '> VECTOR DATABASE ONLINE...',              color: 'var(--bio-bright)' },
+  { text: '> SYSTEM READY.',                          color: 'var(--plasma-gold)' },
 ];
 
 export default function IntroScreen({ onComplete }) {
@@ -34,17 +34,48 @@ export default function IntroScreen({ onComplete }) {
 
       <div className="intro-inner">
         <div className={`intro-logo-block ${phase !== 'idle' ? 'show' : ''}`}>
-          <div className="intro-glyph">🧠</div>
-          <div className="intro-wordmark">GitMind Pro</div>
-          <div className="intro-sub">Neural Code Analysis System</div>
+          {/* Animated amber-teal glyph */}
+          <div className="intro-glyph" style={{ position: 'relative', display: 'inline-block' }}>
+            <span style={{
+              background: 'linear-gradient(135deg, var(--amber-glow) 30%, var(--bio-bright) 100%)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+              fontSize: 48, lineHeight: 1,
+            }}>⬡</span>
+            <span style={{
+              position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 22,
+            }}>G</span>
+          </div>
+          <div className="intro-wordmark">
+            <span style={{ color: 'var(--amber-glow)' }}>G</span>it
+            <span style={{ color: 'var(--amber-glow)' }}>M</span>ind
+            <span style={{ color: 'var(--bio-bright)', marginLeft: 6, fontSize: '0.6em', verticalAlign: 'super', letterSpacing: 2 }}>PRO</span>
+          </div>
+          <div className="intro-sub">Bioluminescent Code Intelligence</div>
         </div>
 
         <div className={`intro-log ${phase === 'log' || phase === 'done' ? 'show' : ''}`}>
           {lines.map((l, i) => (
-            <div key={i} className={`intro-log-line ${l.includes('READY') ? 'ready' : ''}`}>{l}</div>
+            <div
+              key={i}
+              className={`intro-log-line ${l.text.includes('READY') ? 'ready' : ''}`}
+              style={{ color: l.color, transition: `color .3s` }}
+            >
+              {l.text}
+            </div>
           ))}
-          {phase !== 'done' && lines.length > 0 && <span className="intro-log-cursor" />}
-          {phase === 'done' && <div className="intro-enter">[ LAUNCHING ]</div>}
+          {phase !== 'done' && lines.length > 0 && (
+            <span className="intro-log-cursor" style={{ background: 'var(--amber-glow)' }} />
+          )}
+          {phase === 'done' && (
+            <div className="intro-enter" style={{
+              color: 'var(--amber-glow)',
+              border: '1px solid rgba(249,115,22,0.3)',
+              textShadow: '0 0 16px rgba(249,115,22,0.6)',
+            }}>
+              [ FORGE READY ]
+            </div>
+          )}
         </div>
       </div>
     </div>
