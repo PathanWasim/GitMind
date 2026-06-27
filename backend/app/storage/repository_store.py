@@ -59,9 +59,20 @@ class RepositoryStore:
             state = self._read_state()
             repositories = state.setdefault("repositories", {})
             record["updated_at"] = datetime.now(timezone.utc).isoformat()
+            # Remove any existing entry with the same URL to prevent duplicates
+            # when the same repo is re-indexed (each run generates a new UUID).
+            incoming_url = record.get("url", "")
+            if incoming_url:
+                stale_ids = [
+                    rid for rid, r in repositories.items()
+                    if r.get("url") == incoming_url and rid != str(record["id"])
+                ]
+                for rid in stale_ids:
+                    del repositories[rid]
             repositories[str(record["id"])] = record
             self._write_state(state)
         return record
+
 
     def get_repository(self, repository_id: UUID) -> dict[str, Any] | None:
         state = self._read_state()
