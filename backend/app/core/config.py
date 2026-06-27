@@ -21,8 +21,10 @@ class Settings(BaseSettings):
     repository_storage_directory: str = "./data/repos"
     repository_state_file: str = "./data/state/repositories.json"
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
-    openai_model: str = "gpt-4o-mini"
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.1-8b-instant"
     openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"
     backend_cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"]
     )

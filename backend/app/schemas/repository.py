@@ -29,3 +29,12 @@ class RepositoryResponse(BaseModel):
     indexed_at: datetime | None = None
     indexed_files: int = 0
     chunks: int = 0
+    readme_excerpt: str = ""
+    file_tree: list[str] = Field(default_factory=list)
+    language_stats: dict[str, int] = Field(default_factory=dict)
+
+
+
+class RepositoryListResponse(BaseModel):
+    repositories: list[RepositoryResponse]
+    total: int
