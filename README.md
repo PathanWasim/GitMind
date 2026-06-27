@@ -9,7 +9,7 @@
 GitMind Pro lets you index any public GitHub repository and query it in plain English. Under the hood it:
 
 1. **Clones** the repo (shallow, `depth=1`)
-2. **Scans** source files -- 30+ extensions supported, auto-generated lockfiles excluded
+2. **Scans** source files - 30+ extensions supported, auto-generated lockfiles excluded
 3. **Chunks** every file into 80-line overlapping windows
 4. **Embeds** each chunk locally using `sentence-transformers/all-MiniLM-L6-v2` (no external API for embeddings)
 5. **Stores** vectors in a local ChromaDB collection
@@ -22,15 +22,15 @@ Everything runs locally except LLM inference. No data leaves your machine beyond
 
 ## Tech Stack
 
-| | |
+| Component | Technology |
 |---|---|
-| **Backend** | FastAPI · Uvicorn · Pydantic v2 |
+| **Backend** | FastAPI, Uvicorn, Pydantic v2 |
 | **Vectors** | ChromaDB (local persistent HNSW) |
 | **Embeddings** | sentence-transformers all-MiniLM-L6-v2 |
-| **LLM** | Groq LLaMA 3.1 8B Instant · OpenAI GPT-4o-mini (fallback) |
+| **LLM** | Groq LLaMA 3.1 8B Instant, OpenAI GPT-4o-mini (fallback) |
 | **Git** | GitPython (shallow clone) |
-| **Frontend** | React 18 · Vite · Three.js · React Router |
-| **Deployment** | Docker Compose (backend + frontend + PostgreSQL + Redis) |
+| **Frontend** | React 18, Vite, Three.js, React Router |
+| **Deployment** | Docker Compose (backend, frontend, PostgreSQL, Redis) |
 
 ---
 
@@ -69,7 +69,7 @@ npm run dev                   # http://localhost:5173
 | Variable | Where | Required |
 |---|---|---|
 | `GROQ_API_KEY` | `backend/.env` | Yes (or `OPENAI_API_KEY`) |
-| `VITE_API_BASE_URL` | `frontend/.env` | No â defaults to `http://localhost:8000` |
+| `VITE_API_BASE_URL` | `frontend/.env` | No - defaults to `http://localhost:8000` |
 
 ### Docker (full stack)
 
@@ -85,7 +85,7 @@ Starts backend (:8000), frontend (:5173), PostgreSQL (:5432), Redis (:6379).
 
 1. Open `http://localhost:5173`
 2. Click **Index a Repository**, paste a public GitHub URL
-3. Watch the real-time progress: clone â scan â embed â done
+3. Watch the real-time progress: clone -> scan -> embed -> done
 4. Switch to the **Chat** tab and ask anything:
    - *How does authentication work?*
    - *What is the overall architecture?*
@@ -98,24 +98,24 @@ Starts backend (:8000), frontend (:5173), PostgreSQL (:5432), Redis (:6379).
 
 ```
 GitMind/
-âââ backend/
-â   âââ app/
-â   â   âââ main.py               # FastAPI entry point
-â   â   âââ core/config.py        # Pydantic settings
-â   â   âââ api/routes/           # REST + SSE endpoints
-â   â   âââ services/             # IndexingService, RAGService, etc.
-â   â   âââ storage/              # JSON state store with advisory lock
-â   â   âââ vector/               # ChromaDB client
-â   âââ requirements.txt
-âââ frontend/
-â   âââ src/
-â       âââ pages/LandingPage.jsx # Scroll-driven Three.js story
-â       âââ pages/AppPage.jsx     # Main app shell
-â       âââ components/           # ChatView, RepoOverview, Cursor, etc.
-â       âââ services/api.js       # HTTP + SSE client
-âââ docker-compose.yml
-âââ README.md
-âââ gitmind.md                    # Full technical reference
++- backend/
+|  +- app/
+|  |  +- main.py               # FastAPI entry point
+|  |  +- core/config.py        # Pydantic settings
+|  |  +- api/routes/           # REST + SSE endpoints
+|  |  +- services/             # IndexingService, RAGService, etc.
+|  |  +- storage/              # JSON state store with advisory lock
+|  |  +- vector/               # ChromaDB client
+|  |  +- requirements.txt
++- frontend/
+|  +- src/
+|     +- pages/LandingPage.jsx # Scroll-driven Three.js story
+|     +- pages/AppPage.jsx     # Main app shell
+|     +- components/           # ChatView, RepoOverview, Cursor, etc.
+|     +- services/api.js       # HTTP + SSE client
++- docker-compose.yml
++- README.md
++- gitmind.md                    # Full technical reference
 ```
 
 ---
@@ -136,12 +136,12 @@ Full API docs at `http://localhost:8000/docs` (FastAPI auto-generated Swagger UI
 
 ## Design Notes
 
-- **Local-first** â embeddings and vector search run entirely on your machine
-- **No duplicate repos** â re-indexing the same URL replaces the existing entry (URL-based deduplication)
-- **Lockfile exclusion** â `package-lock.json`, `yarn.lock`, `Cargo.lock` etc. are skipped to prevent token overflow
-- **Token budget** â retrieval capped at 6 chunks to stay within Groq's free-tier 12K TPM limit
-- **Crash-safe writes** â state uses atomic rename (`os.replace`) on every write
-- **Tab state preserved** â chat messages survive tab switches via `display:none` (no unmount)
+- **Local-first** - embeddings and vector search run entirely on your machine
+- **No duplicate repos** - re-indexing the same URL replaces the existing entry (URL-based deduplication)
+- **Lockfile exclusion** - `package-lock.json`, `yarn.lock`, `Cargo.lock` etc. are skipped to prevent token overflow
+- **Token budget** - retrieval capped at 6 chunks to stay within Groq's free-tier 12K TPM limit
+- **Crash-safe writes** - state uses atomic rename (`os.replace`) on every write
+- **Tab state preserved** - chat messages survive tab switches via `display:none` (no unmount)
 
 ---
 
