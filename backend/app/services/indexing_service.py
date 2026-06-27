@@ -32,6 +32,11 @@ IGNORED_DIRECTORIES = {
     ".mypy_cache", ".ruff_cache", ".next", ".nuxt", "coverage",
 }
 
+IGNORED_FILENAMES = {
+    "package-lock.json", "yarn.lock", "pnpm-lock.yaml", 
+    "poetry.lock", "Gemfile.lock", "Cargo.lock"
+}
+
 MAX_FILE_BYTES = 350_000
 CHUNK_LINES = 80
 CHUNK_OVERLAP = 15
@@ -194,6 +199,8 @@ class IndexingService:
                 if not path.is_file():
                     continue
                 if any(part in IGNORED_DIRECTORIES for part in path.parts):
+                    continue
+                if path.name in IGNORED_FILENAMES:
                     continue
                 if path.suffix.lower() not in SUPPORTED_EXTENSIONS and path.name not in SUPPORTED_FILENAMES:
                     continue

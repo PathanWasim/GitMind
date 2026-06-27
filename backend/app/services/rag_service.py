@@ -52,7 +52,7 @@ class RAGService:
         query_embedding = await run_in_threadpool(embed_query, query)
         results = collection.query(
             query_embeddings=[query_embedding],
-            n_results=min(12, collection_size),
+            n_results=min(6, collection_size),
         )
         documents = results.get("documents", [[]])[0]
         metadatas = results.get("metadatas", [[]])[0]
