@@ -3,7 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GitMind Pro</title>
+    <title>GitMind Pro — Understand any codebase</title>
+
+    <!-- GSAP (CDN, no npm). jsDelivr gsap@3.13.0 hosts ALL plugins free,
+         unlike cdnjs 3.12.5 which 404s on ScrollSmoother/SplitText.
+         Plain (blocking) scripts in <head> so window.gsap is defined
+         before the deferred main.jsx module runs. All usage is still
+         guarded on window.gsap so the app degrades gracefully if a
+         request fails. -->
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollSmoother.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/SplitText.min.js"></script>
   </head>
   <body>
     <div id="root"></div>

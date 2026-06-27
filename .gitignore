@@ -16,3 +16,8 @@ backend/data/
 backend/alembic/versions/*.py
 !backend/alembic/versions/.gitkeep
 !backend/alembic/versions/0001_initial_schema.py
+
+# Local workspace markdown files to ignore
+CLAUDE.md
+prompt.md
+
