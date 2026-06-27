@@ -29,17 +29,13 @@ const LOG_LINES = {
   saving:    ['→ Writing to ChromaDB collection', '→ Persisting file metadata', '→ Building search index'],
 };
 
-/* ─── Neural EQ bar in topbar ──────────────────────────── */
-function NeuralEQ() {
-  const heights = [8, 14, 6, 18, 10, 16, 8, 12, 6, 14, 10, 18];
+/* ─── Mini EQ visualizer for the model chip ─────────────── */
+function MiniEQ() {
+  const heights = [10, 14, 7, 12, 8];
   return (
-    <div className="app-neural-eq" title="Neural activity">
+    <div className="mc-eq" title="Neural activity">
       {heights.map((h, i) => (
-        <div
-          key={i}
-          className="app-eq-bar"
-          style={{ '--h': `${h}px`, height: h, animationDuration:`${0.6 + i * 0.07}s`, animationDelay:`${i * 0.05}s` }}
-        />
+        <i key={i} style={{ height: h, '--h': `${h}px`, animation: `eq-anim ${0.6 + i * 0.1}s ease-in-out infinite`, animationDelay: `${i * 0.05}s` }} />
       ))}
     </div>
   );
@@ -107,7 +103,6 @@ function StageViz({ stage, percent }) {
       id = requestAnimationFrame(draw);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const elapsed = now - t0;
-      const s = elapsed / 1000;
       const st = stageRef.current;
 
       if (st === 'cloning' || st === null) {
@@ -133,13 +128,11 @@ function StageViz({ stage, percent }) {
         };
         ctx.globalAlpha = 1;
         drawBranch(cx, cy, 120, Math.PI/2, 4);
-        // Main trunk label
         ctx.fillStyle = 'rgba(249,115,22,0.7)';
         ctx.font = '11px JetBrains Mono, monospace';
         ctx.fillText('main', cx + 8, cy - 130 * progress);
 
       } else if (st === 'scanning') {
-        // File nodes appearing sequentially
         nodes.forEach((n, i) => {
           if (elapsed < n.showAt) return;
           ctx.globalAlpha = Math.min(1, (elapsed - n.showAt) / 300);
@@ -153,7 +146,6 @@ function StageViz({ stage, percent }) {
         });
 
       } else if (st === 'chunking') {
-        // Files breaking into chunks
         const cols = 4, rows = 3;
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
@@ -163,7 +155,6 @@ function StageViz({ stage, percent }) {
             ctx.globalAlpha = 0.8;
             ctx.strokeStyle = 'rgba(249,115,22,0.5)'; ctx.lineWidth = 1;
             ctx.strokeRect(fx, fy, 70, 55);
-            // Draw chunk dividers
             if (fProgress > 0.3) {
               for (let ch = 1; ch <= 3; ch++) {
                 const lineY = fy + ch * 13;
@@ -178,7 +169,6 @@ function StageViz({ stage, percent }) {
         }
 
       } else if (st === 'embedding') {
-        // Dots flying from left to cluster on right
         dots.forEach(d => {
           if (elapsed < d.delay) return;
           const t = Math.min(1, (elapsed - d.delay) / 1800);
@@ -191,7 +181,6 @@ function StageViz({ stage, percent }) {
           ctx.fillStyle = d.color;
           ctx.shadowBlur = 8; ctx.shadowColor = d.color;
           ctx.fill(); ctx.shadowBlur = 0;
-          // Trail
           if (t > 0.1 && t < 0.95) {
             const bx = d.x + (d.tx - d.x) * ease * 0.8;
             const by = d.y + (d.ty - d.y) * ease * 0.8;
@@ -200,7 +189,6 @@ function StageViz({ stage, percent }) {
             ctx.strokeStyle = d.color; ctx.lineWidth = 1; ctx.stroke();
           }
         });
-        // Cluster glow
         const arrived = dots.filter(d => d.arrived).length;
         if (arrived > 5) {
           ctx.globalAlpha = 0.15;
@@ -212,7 +200,6 @@ function StageViz({ stage, percent }) {
         if (elapsed > 2500) { t0 = now - 500; initDots(); }
 
       } else if (st === 'saving' || st === 'complete') {
-        // Grid solidifying
         const cols2 = 10, rows2 = 8;
         const cellW = (canvas.width - 40) / cols2;
         const cellH = (canvas.height - 40) / rows2;
@@ -258,13 +245,13 @@ function StageViz({ stage, percent }) {
   );
 }
 
-/* ─── Full screen indexing overlay ─────────────────────── */
-function IndexingOverlay({ stage, percent, logLines, onCancel }) {
+/* ─── Full screen indexing overlay (clip-path takeover) ─── */
+function IndexingOverlay({ stage, percent, logLines }) {
   const label = STAGE_LABELS[stage] ?? stage?.toUpperCase() ?? 'INITIALIZING';
   const desc  = STAGE_DESC[stage]  ?? 'Processing...';
 
   return (
-    <div className="indexing-overlay">
+    <div className="indexing-overlay indexing-overlay-expand">
       <div style={{ padding:'20px 40px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:16 }}>
         <div style={{ width:28, height:28, borderRadius:8, background:'linear-gradient(135deg,#C2410C,#F97316)', display:'grid', placeItems:'center', fontSize:14, boxShadow:'0 0 20px rgba(249,115,22,0.5)' }}>⬡</div>
         <div style={{ fontFamily:'var(--syne)', fontSize:15, fontWeight:700, color:'var(--w1)' }}>GitMind</div>
@@ -275,7 +262,7 @@ function IndexingOverlay({ stage, percent, logLines, onCancel }) {
       <div className="indexing-overlay-inner">
         {/* Left — terminal logs */}
         <div className="indexing-terminal">
-          <div style={{ fontFamily:'var(--mono)', fontSize:10, color:'var(--indigo-2)', letterSpacing:3, textTransform:'uppercase', marginBottom:8 }}>
+          <div style={{ fontFamily:'var(--mono)', fontSize:10, color:'var(--bio-bright)', letterSpacing:3, textTransform:'uppercase', marginBottom:8 }}>
             Stage {Object.keys(STAGE_LABELS).indexOf(stage) + 1} / {Object.keys(STAGE_LABELS).length}
           </div>
           <div className="indexing-stage-label grad-text">{label}</div>
@@ -303,7 +290,7 @@ function IndexingOverlay({ stage, percent, logLines, onCancel }) {
 
       {/* Progress beam at bottom */}
       <div className="indexing-progress-bar">
-        <div style={{ fontFamily:'var(--mono)', fontSize:11, color:'var(--indigo-2)', letterSpacing:1, minWidth:140 }}>
+        <div style={{ fontFamily:'var(--mono)', fontSize:11, color:'var(--bio-bright)', letterSpacing:1, minWidth:140 }}>
           {label}
         </div>
         <div className="indexing-progress-track">
@@ -353,7 +340,6 @@ function IndexModal({ onClose, onIndexed }) {
         stage={progress.stage}
         percent={progress.percent}
         logLines={logLines}
-        onCancel={() => {}}
       />
     );
   }
@@ -397,55 +383,6 @@ function IndexModal({ onClose, onIndexed }) {
   );
 }
 
-/* ─── Repo dropdown selector ─────────────────────────────── */
-function RepoSelector({ repos, activeRepo, onSelect }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const close = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, []);
-
-  return (
-    <div className="app-repo-selector" ref={ref}>
-      <button
-        className={`app-repo-btn ${activeRepo ? 'has-repo' : ''}`}
-        onClick={() => setOpen(o => !o)}
-      >
-        {activeRepo
-          ? <><div className="app-dropdown-dot" />{activeRepo.name}</>
-          : <span style={{ color:'var(--w4)' }}>No Repository Selected</span>
-        }
-        <span className={`app-repo-arrow ${open ? 'open' : ''}`}>▼</span>
-      </button>
-
-      {open && (
-        <div className="app-dropdown">
-          <div className="app-dropdown-label">Indexed Repositories</div>
-          {repos.length === 0
-            ? <div className="app-dropdown-empty">No repos yet — index one first</div>
-            : repos.map(r => (
-                <div
-                  key={r.id}
-                  className={`app-dropdown-item ${r.id === activeRepo?.id ? 'active' : ''}`}
-                  onClick={() => { onSelect(r); setOpen(false); }}
-                >
-                  <div className="app-dropdown-dot" />
-                  <div>
-                    <div>{r.name}</div>
-                    <div className="app-dropdown-sub">{r.indexed_files} files · {r.chunks} chunks</div>
-                  </div>
-                </div>
-              ))
-          }
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ─── Welcome screen ─────────────────────────────────────── */
 function Welcome({ onOpen }) {
   return (
@@ -456,9 +393,8 @@ function Welcome({ onOpen }) {
         Paste a GitHub URL to index your codebase. Then ask anything — architecture,
         logic, data flow — and get source-cited answers.
       </div>
-      <button className="l-btn-cta" onClick={onOpen} style={{ margin:'0 auto' }}>
-        <span>Index a Repository</span>
-        <span>→</span>
+      <button className="s-cta" onClick={onOpen} style={{ margin:'0 auto' }}>
+        <span>Index a Repository →</span>
       </button>
     </div>
   );
@@ -500,6 +436,41 @@ function RepoView({ repo }) {
   );
 }
 
+/* ─── Sidebar — repository rail ──────────────────────────── */
+function Sidebar({ repos, activeRepo, onSelect, onIndex, onHome }) {
+  return (
+    <aside className="mc-sidebar">
+      <div className="mc-brand" onClick={onHome}>
+        <div className="mc-brand-mark">⬡</div>
+        <span className="mc-brand-name">GitMind</span>
+      </div>
+
+      <div className="mc-side-head">Repositories</div>
+      <div className="mc-repos">
+        {repos.length === 0
+          ? <div className="mc-repos-empty">No repositories yet. Index one to begin.</div>
+          : repos.map((r, i) => (
+              <div
+                key={r.id}
+                className={`mc-repo ${r.id === activeRepo?.id ? 'active' : ''}`}
+                onClick={() => onSelect(r)}
+                style={{ animation: `dropIn .3s var(--ease) ${i * 0.06}s both` }}
+              >
+                <div className="mc-repo-dot" />
+                <div className="mc-repo-info">
+                  <div className="mc-repo-name">{r.name}</div>
+                  <div className="mc-repo-meta">{r.indexed_files} files</div>
+                </div>
+              </div>
+            ))
+        }
+      </div>
+
+      <button className="mc-index-btn" onClick={onIndex}>+ Index New Repo</button>
+    </aside>
+  );
+}
+
 /* ─── App page root ──────────────────────────────────────── */
 export default function AppPage() {
   const navigate = useNavigate();
@@ -537,56 +508,45 @@ export default function AppPage() {
   }
 
   return (
-    <div className="app">
+    <div className="mc">
       {showIntro && <IntroScreen onComplete={() => setShowIntro(false)} />}
 
-      {/* Mission control grid background */}
-      <div className="app-bg" />
-      <div className="app-grid-bg" />
+      <Sidebar
+        repos={repos}
+        activeRepo={activeRepo}
+        onSelect={setActiveRepo}
+        onIndex={() => setShowModal(true)}
+        onHome={() => navigate('/')}
+      />
 
-      {/* Topbar */}
-      <nav className="app-topbar">
-        <div className="app-logo" onClick={() => navigate('/')} style={{ cursor:'pointer' }}>
-          <div className="app-logo-mark">⬡</div>
-          <span className="app-logo-name">GitMind</span>
-        </div>
-
-        <RepoSelector repos={repos} activeRepo={activeRepo} onSelect={setActiveRepo} />
-
-        {/* Breadcrumb */}
-        {activeRepo && (
-          <div className="app-breadcrumb">
-            <span style={{ color:'var(--w4)' }}>GitMind</span>
-            <span className="app-breadcrumb-sep">/</span>
-            <span className="app-breadcrumb-active">{activeRepo.name}</span>
-            <span className="app-breadcrumb-sep">/</span>
-            <span style={{ color:'var(--w4)' }}>Chat</span>
+      <div className="mc-main">
+        {/* Topbar */}
+        <div className="mc-topbar">
+          <div className="mc-crumb">
+            <span>GitMind</span>
+            {activeRepo && <>
+              <span className="sep">/</span>
+              <span className="cur">{activeRepo.name}</span>
+              <span className="sep">/</span>
+              <span>Workspace</span>
+            </>}
           </div>
-        )}
-
-        {/* Model badge */}
-        <div className="app-model-badge">LLaMA 3.3 70B</div>
-
-        {/* Neural activity EQ */}
-        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-          <NeuralEQ />
-          <div style={{ fontFamily:'var(--mono)', fontSize:8, color:'var(--w4)', letterSpacing:1, textTransform:'uppercase' }}>Neural</div>
+          <div className="mc-model">
+            <span className="mc-model-name">LLaMA 3.3 70B</span>
+            <MiniEQ />
+          </div>
         </div>
 
-        <button
-          className="app-btn-index"
-          onClick={() => setShowModal(true)}
-        >
-          + Index Repo
-        </button>
-      </nav>
-
-      {/* Main content */}
-      <div className="app-canvas">
-        {activeRepo
-          ? <RepoView key={activeRepo.id} repo={activeRepo} />
-          : <Welcome onOpen={() => setShowModal(true)} />
-        }
+        {/* Body */}
+        <div className="mc-body">
+          <div className="mc-bg" />
+          <div className="mc-content">
+            {activeRepo
+              ? <RepoView key={activeRepo.id} repo={activeRepo} />
+              : <Welcome onOpen={() => setShowModal(true)} />
+            }
+          </div>
+        </div>
       </div>
 
       {showModal && (

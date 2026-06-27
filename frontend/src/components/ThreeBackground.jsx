@@ -1,353 +1,336 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
-/* ── Inline 3D value noise (no external lib) ──────────────── */
-function hash(n) {
-  let x = Math.sin(n) * 43758.5453123;
-  return x - Math.floor(x);
-}
-function noise3(x, y, z) {
-  const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
-  const fx = x - ix, fy = y - iy, fz = z - iz;
-  const ux = fx * fx * (3 - 2 * fx);
-  const uy = fy * fy * (3 - 2 * fy);
-  const uz = fz * fz * (3 - 2 * fz);
-  const n000 = hash(ix + hash(iy + hash(iz)));
-  const n100 = hash(ix + 1 + hash(iy + hash(iz)));
-  const n010 = hash(ix + hash(iy + 1 + hash(iz)));
-  const n110 = hash(ix + 1 + hash(iy + 1 + hash(iz)));
-  const n001 = hash(ix + hash(iy + hash(iz + 1)));
-  const n101 = hash(ix + 1 + hash(iy + hash(iz + 1)));
-  const n011 = hash(ix + hash(iy + 1 + hash(iz + 1)));
-  const n111 = hash(ix + 1 + hash(iy + 1 + hash(iz + 1)));
-  return (
-    n000 * (1-ux) * (1-uy) * (1-uz) + n100 * ux * (1-uy) * (1-uz) +
-    n010 * (1-ux) * uy * (1-uz)     + n110 * ux * uy * (1-uz) +
-    n001 * (1-ux) * (1-uy) * uz     + n101 * ux * (1-uy) * uz +
-    n011 * (1-ux) * uy * uz         + n111 * ux * uy * uz
-  ) * 2 - 1;
-}
+/* ════════════════════════════════════════════════════════════
+   THE CODEBASE UNIVERSE
+   A fixed 3D scene behind the scroll story. 200 glowing cubes
+   ("files") + a central TorusKnot ("AI core"). Scroll progress
+   (read straight from window.scrollY — ScrollSmoother keeps the
+   native scroll position valid) drives the camera dolly and the
+   cube choreography across the 6 acts:
 
-/* ── Mobile detection ─────────────────────────────────────── */
+     cloud → column(clone/scan) → cluster+orbit(embed/answer) → recede(cta)
+
+   Decoupled from GSAP on purpose: no ScrollTrigger here means no
+   plugin-load/ordering races. Degrades to a CSS gradient on mobile
+   or with prefers-reduced-motion.
+════════════════════════════════════════════════════════════ */
+
 const isMobile = () => window.innerWidth < 768;
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
+const smooth = (x) => { x = clamp01(x); return x * x * (3 - 2 * x); };
 
-/* ── Mobile fallback: CSS conic gradient ─────────────────── */
-function MobileGradient() {
-  return (
-    <div
-      style={{
-        position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none',
-        background: 'conic-gradient(from 0deg at 30% 40%, #08060F 0%, #1A0A04 20%, #0D1A12 40%, #08060F 60%, #1A0804 80%, #08060F 100%)',
-        animation: 'bgPulse 8s ease-in-out infinite',
-      }}
-    />
-  );
+/* Piecewise-linear keyframe interpolation: keys = [[pos,val],...] */
+function lerpKeys(keys, p) {
+  if (p <= keys[0][0]) return keys[0][1];
+  for (let i = 1; i < keys.length; i++) {
+    if (p <= keys[i][0]) {
+      const [p0, v0] = keys[i - 1], [p1, v1] = keys[i];
+      return lerp(v0, v1, (p - p0) / (p1 - p0 || 1));
+    }
+  }
+  return keys[keys.length - 1][1];
 }
+
+const CAM_Z   = [[0,12],[0.16,12],[0.33,8],[0.50,6],[0.66,5],[0.83,10],[1,14]];
+const CAM_X   = [[0,0],[0.16,0],[0.33,-1],[0.50,-0.5],[0.66,0],[1,0]];
+const CAM_ROT = [[0,0],[0.33,0],[0.42,0.05],[0.50,0],[1,0]];
 
 export default function ThreeBackground() {
   const ref = useRef(null);
 
-  if (isMobile()) return <MobileGradient />;
-
   useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    if (isMobile()) return;
-
     const el = ref.current;
     if (!el) return;
-    const W = el.clientWidth, H = el.clientHeight;
 
-    /* ── Renderer ──────────────────────────────────────────── */
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced || isMobile()) {
+      el.style.background =
+        'conic-gradient(from 210deg at 70% 30%, #07050E, #1A0A04 22%, #0A1714 45%, #07050E 65%, #1A0804 85%, #07050E)';
+      return;
+    }
+
+    const W = el.clientWidth || window.innerWidth;
+    const H = el.clientHeight || window.innerHeight;
+
+    /* ── Renderer / scene / camera ── */
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x08060F, 1);
-    renderer.shadowMap.enabled = false;
+    renderer.setClearColor(0x07050e, 1);
     el.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x08060F);
+    scene.background = new THREE.Color(0x07050e);
+    scene.fog = new THREE.FogExp2(0x07050e, 0.035);
 
     const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 100);
-    camera.position.set(0, 0, 8);
+    camera.position.set(0, 0, 12);
 
-    /* ── Lights ────────────────────────────────────────────── */
-    const ambientLight = new THREE.AmbientLight(0xF5E8D8, 0.4);
-    scene.add(ambientLight);
-
-    const amberLight = new THREE.PointLight(0xF97316, 3, 20);
-    amberLight.position.set(5, 5, 5);
+    /* ── Lights ── */
+    scene.add(new THREE.AmbientLight(0xf5e8d8, 0.35));
+    const amberLight = new THREE.PointLight(0xf97316, 2, 40);
+    amberLight.position.set(3, 3, 3);
     scene.add(amberLight);
-
-    const tealLight = new THREE.PointLight(0x0D9488, 2, 20);
-    tealLight.position.set(-5, -3, 5);
+    const tealLight = new THREE.PointLight(0x0d9488, 1.5, 40);
+    tealLight.position.set(-3, -2, 3);
     scene.add(tealLight);
 
-    /* ── Store original vertex positions for morphing ──────── */
-    function createBlob(radius, segments, color, roughness = 0.0, metalness = 0.8) {
-      const geo = new THREE.SphereGeometry(radius, segments, segments);
-      const posAttr = geo.attributes.position;
-
-      // Store original positions for morphing
-      const origPos = new Float32Array(posAttr.array.length);
-      origPos.set(posAttr.array);
-      geo.userData.origPos = origPos;
-
-      const mat = new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color(color),
-        roughness,
-        metalness,
-        envMapIntensity: 1.5,
-        transmission: 0.3,
-        transparent: true,
-        opacity: 0.92,
-      });
-
-      const mesh = new THREE.Mesh(geo, mat);
-      return mesh;
-    }
-
-    /* ── Central blob ──────────────────────────────────────── */
-    const centralBlob = createBlob(2.0, 80, 0xC2410C);
-    scene.add(centralBlob);
-
-    /* ── Satellite blobs ───────────────────────────────────── */
-    const satellites = [
-      { blob: createBlob(0.7, 48, 0x0D9488, 0.1, 0.7), speed: 0.4, incl: 0.3,  radius: 3.2, phase: 0 },
-      { blob: createBlob(0.9, 48, 0xEAB308, 0.05, 0.9), speed: 0.25, incl: 1.1, radius: 3.8, phase: 2.1 },
-      { blob: createBlob(0.6, 48, 0xC2410C, 0.0, 0.95), speed: 0.55, incl: -0.6, radius: 2.9, phase: 4.2 },
-    ];
-    satellites.forEach(s => scene.add(s.blob));
-
-    /* ── Particles in river streams ────────────────────────── */
-    const PARTICLE_COUNT = 4000;
-    const pPositions = new Float32Array(PARTICLE_COUNT * 3);
-    const pColors    = new Float32Array(PARTICLE_COUNT * 3);
-    const pSizes     = new Float32Array(PARTICLE_COUNT);
-    const pParams    = new Float32Array(PARTICLE_COUNT * 2); // t, streamId
-
-    const palette = [
-      [0xC2 / 255, 0x41 / 255, 0x0C / 255], // amber-deep
-      [0xF9 / 255, 0x73 / 255, 0x16 / 255], // amber-glow
-      [0x0D / 255, 0x94 / 255, 0x88 / 255], // bio-teal
-      [0x2D / 255, 0xD4 / 255, 0xBF / 255], // bio-bright
-      [0xEA / 255, 0xB3 / 255, 0x08 / 255], // plasma-gold
-    ];
-
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      const t = i / PARTICLE_COUNT;
-      const stream = Math.floor(Math.random() * 6); // 6 stream types
-      pParams[i * 2]     = t;
-      pParams[i * 2 + 1] = stream;
-
-      // Initial positions (will be updated each frame)
-      pPositions[i * 3]     = 0;
-      pPositions[i * 3 + 1] = 0;
-      pPositions[i * 3 + 2] = 0;
-
-      const pc = palette[Math.floor(Math.random() * palette.length)];
-      const jitter = () => (Math.random() - 0.5) * 0.15;
-      pColors[i * 3]     = Math.min(1, pc[0] + jitter());
-      pColors[i * 3 + 1] = Math.min(1, pc[1] + jitter());
-      pColors[i * 3 + 2] = Math.min(1, pc[2] + jitter());
-
-      pSizes[i] = 0.8 + Math.random() * 1.6;
-    }
-
-    const particleGeo = new THREE.BufferGeometry();
-    particleGeo.setAttribute('position', new THREE.BufferAttribute(pPositions, 3));
-    particleGeo.setAttribute('color',    new THREE.BufferAttribute(pColors, 3));
-    particleGeo.setAttribute('size',     new THREE.BufferAttribute(pSizes, 1));
-
-    const particleMat = new THREE.ShaderMaterial({
-      uniforms: { uTime: { value: 0 } },
-      vertexShader: `
-        attribute float size;
-        varying vec3 vColor;
-        void main() {
-          vColor = color;
-          vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = size * (300.0 / -mv.z);
-          gl_Position = projectionMatrix * mv;
-        }
-      `,
-      fragmentShader: `
-        varying vec3 vColor;
-        void main() {
-          vec2 uv = gl_PointCoord - 0.5;
-          float d = length(uv);
-          if (d > 0.5) discard;
-          float a = (1.0 - smoothstep(0.0, 0.5, d)) * 0.75;
-          gl_FragColor = vec4(vColor, a);
-        }
-      `,
-      transparent: true,
-      vertexColors: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
+    /* ── AI core: TorusKnot ── */
+    const knotGeo = new THREE.TorusKnotGeometry(0.8, 0.25, 120, 16);
+    const knotMat = new THREE.MeshPhysicalMaterial({
+      color: 0xf97316, metalness: 0.9, roughness: 0.1,
+      iridescence: 0.6, iridescenceIOR: 1.6, envMapIntensity: 1.2,
     });
+    const knot = new THREE.Mesh(knotGeo, knotMat);
+    scene.add(knot);
 
-    const particles = new THREE.Points(particleGeo, particleMat);
-    scene.add(particles);
+    /* ── 200 "file" cubes via a single InstancedMesh ── */
+    const COUNT = 200;
+    const cubeGeo = new THREE.BoxGeometry(0.16, 0.16, 0.16);
+    const cubeMat = new THREE.MeshStandardMaterial({
+      metalness: 0.6, roughness: 0.35, emissive: 0x1a0a04, emissiveIntensity: 0.4,
+    });
+    const cubes = new THREE.InstancedMesh(cubeGeo, cubeMat, COUNT);
+    cubes.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(cubes);
 
-    /* ── Mouse parallax ────────────────────────────────────── */
-    let targetMX = 0, targetMY = 0, currentMX = 0, currentMY = 0;
-    const onMouseMove = e => {
-      targetMX = (e.clientX / window.innerWidth  - 0.5) * 2;
-      targetMY = -(e.clientY / window.innerHeight - 0.5) * 2;
+    const AMBER = new THREE.Color(0xf97316);
+    const TEAL  = new THREE.Color(0x0d9488);
+    const GOLD  = new THREE.Color(0xeab308);
+
+    // Per-cube state: cloud pos, column pos, orbit params, spin, color
+    const data = [];
+    for (let i = 0; i < COUNT; i++) {
+      const base = i % 3 === 0 ? GOLD : i % 2 === 0 ? AMBER : TEAL;
+      data.push({
+        cloud: new THREE.Vector3(
+          (Math.random() - 0.5) * 11,
+          (Math.random() - 0.5) * 9,
+          (Math.random() - 0.5) * 9
+        ),
+        column: new THREE.Vector3(
+          2.3 + (i % 4) * 0.32,
+          (i / 4 - COUNT / 8) * 0.22,
+          (Math.random() - 0.5) * 0.6
+        ),
+        orbitR: 1.5 + (i % 5) * 0.28,
+        orbitA: i * 0.41,
+        orbitY: ((i % 7) - 3) * 0.32,
+        orbitS: 0.15 + (i % 4) * 0.06,
+        spin: new THREE.Vector3(Math.random() * 0.02, Math.random() * 0.02, Math.random() * 0.02),
+        floatPh: Math.random() * Math.PI * 2,
+        base, color: base.clone(),
+      });
+      cubes.setColorAt(i, base);
+    }
+    cubes.instanceColor.needsUpdate = true;
+
+    /* ── Scan plane (Act 3) ── */
+    const scanGeo = new THREE.PlaneGeometry(9, 0.06);
+    const scanMat = new THREE.MeshBasicMaterial({
+      color: 0xf97316, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const scanPlane = new THREE.Mesh(scanGeo, scanMat);
+    scanPlane.position.set(2.8, 0, 0.5);
+    scene.add(scanPlane);
+
+    /* ── Neural connection lines (Act 4) ── */
+    const LINE_N = 60;
+    const linePos = new Float32Array(LINE_N * 2 * 3);
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0x2dd4bf, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const lines = new THREE.LineSegments(lineGeo, lineMat);
+    scene.add(lines);
+
+    /* ── Shockwave ring (Act 5) ── */
+    const ringGeo = new THREE.TorusGeometry(1, 0.04, 8, 60);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xeab308, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    scene.add(ring);
+
+    /* ── Golden particle stream from the core (Act 5) ── */
+    const GP = 50;
+    const gpPos = new Float32Array(GP * 3);
+    const gpDir = [];
+    for (let i = 0; i < GP; i++) {
+      const v = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+      gpDir.push(v);
+    }
+    const gpGeo = new THREE.BufferGeometry();
+    gpGeo.setAttribute('position', new THREE.BufferAttribute(gpPos, 3));
+    const gpMat = new THREE.PointsMaterial({
+      color: 0xeab308, size: 0.08, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const goldParticles = new THREE.Points(gpGeo, gpMat);
+    scene.add(goldParticles);
+
+    /* ── Mouse parallax ── */
+    let tMX = 0, tMY = 0, cMX = 0, cMY = 0;
+    const onMouse = (e) => {
+      tMX = (e.clientX / window.innerWidth - 0.5) * 2;
+      tMY = -(e.clientY / window.innerHeight - 0.5) * 2;
     };
-    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mousemove', onMouse);
 
-    /* ── Resize ────────────────────────────────────────────── */
     const onResize = () => {
-      const w = el.clientWidth, h = el.clientHeight;
-      renderer.setSize(w, h);
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
+      const w = el.clientWidth || window.innerWidth, h = el.clientHeight || window.innerHeight;
+      renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
     };
     window.addEventListener('resize', onResize);
 
-    /* ── Particle stream position functions ────────────────── */
-    function streamPos(stream, t, time) {
-      const tt = (t + time * 0.05) % 1;
-      const angle = tt * Math.PI * 2;
-      let x, y, z;
+    /* ── Scroll progress (native scroll pos works under ScrollSmoother) ── */
+    let prog = 0;
+    const readScroll = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      return max > 0 ? clamp01(window.scrollY / max) : 0;
+    };
 
-      switch (stream % 6) {
-        case 0: { // helix 1
-          const r = 3.5 + Math.sin(tt * Math.PI * 4) * 0.5;
-          x = r * Math.cos(angle * 3);
-          y = (tt - 0.5) * 6;
-          z = r * Math.sin(angle * 3);
-          break;
-        }
-        case 1: { // helix 2 — opposite phase
-          const r = 3.2 + Math.cos(tt * Math.PI * 3) * 0.6;
-          x = r * Math.cos(angle * 3 + Math.PI);
-          y = (tt - 0.5) * 6;
-          z = r * Math.sin(angle * 3 + Math.PI);
-          break;
-        }
-        case 2: { // figure-8 equatorial
-          const scale = 4.0;
-          x = scale * Math.sin(angle);
-          y = scale * Math.sin(angle * 2) * 0.5;
-          z = scale * Math.cos(angle);
-          break;
-        }
-        case 3: { // polar orbit
-          const r2 = 4.2;
-          x = r2 * Math.sin(angle) * Math.cos(tt * Math.PI);
-          y = r2 * Math.cos(angle);
-          z = r2 * Math.sin(angle) * Math.sin(tt * Math.PI);
-          break;
-        }
-        case 4: { // tight spiral inward
-          const r3 = 2.5 + (1 - tt) * 2.5;
-          x = r3 * Math.cos(angle * 5);
-          y = (tt - 0.5) * 3;
-          z = r3 * Math.sin(angle * 5);
-          break;
-        }
-        default: { // loose drift
-          const r4 = 5 + Math.sin(tt * Math.PI * 6 + 1.2) * 1.5;
-          x = r4 * Math.cos(angle * 1.5 + 0.8);
-          y = (tt - 0.5) * 8;
-          z = r4 * Math.sin(angle * 1.5 + 0.8);
-        }
-      }
-      return [x, y, z];
-    }
+    const dummy = new THREE.Object3D();
+    const tmp = new THREE.Vector3();
+    const knotPos = new THREE.Vector3();
+    const WHITE = new THREE.Color(0xffffff);
+    let animId, running = true, wasScan = false;
 
-    /* ── Animation loop ────────────────────────────────────── */
-    let animId;
-    const animate = (timestamp) => {
+    const animate = (ts) => {
+      if (!running) return;
       animId = requestAnimationFrame(animate);
-      const t = timestamp * 0.001;
+      const t = ts * 0.001;
 
-      /* Mouse lerp */
-      currentMX += (targetMX - currentMX) * 0.05;
-      currentMY += (targetMY - currentMY) * 0.05;
+      // Smooth scroll progress + mouse
+      prog += (readScroll() - prog) * 0.08;
+      cMX += (tMX - cMX) * 0.05; cMY += (tMY - cMY) * 0.05;
+      const p = prog;
 
-      /* Central blob morphing via noise-based vertex displacement */
-      {
-        const geo = centralBlob.geometry;
-        const posAttr = geo.attributes.position;
-        const orig = geo.userData.origPos;
-        const normals = geo.attributes.normal;
+      // ── Camera ──
+      camera.position.z = lerpKeys(CAM_Z, p) + cMX * 0.3;
+      camera.position.x = lerpKeys(CAM_X, p) + cMX * 0.5;
+      camera.position.y = cMY * 0.5 + lerp(0, 0.6, smooth((p - 0.5) / 0.16));
+      camera.rotation.z = lerpKeys(CAM_ROT, p);
+      camera.lookAt(0, 0, 0);
 
-        for (let i = 0; i < posAttr.count; i++) {
-          const ox = orig[i * 3], oy = orig[i * 3 + 1], oz = orig[i * 3 + 2];
-          const nx = normals.getX(i), ny = normals.getY(i), nz = normals.getZ(i);
-          // Noise-based morphing
-          const disp = (
-            Math.sin(t * 0.3 + ox * 2) * 0.3 +
-            noise3(ox * 1.2 + t * 0.2, oy * 1.2, oz * 1.2) * 0.25
-          );
-          posAttr.setXYZ(i, ox + nx * disp, oy + ny * disp, oz + nz * disp);
+      // ── Formation weights ──
+      const wColumn  = smooth((p - 0.16) / 0.20);                 // cloud → column
+      const wCluster = smooth((p - 0.45) / 0.17);                 // column → orbit/cluster
+
+      // ── AI core choreography ──
+      const knotX = lerp(0, -2, smooth((p - 0.16) / 0.14)) * (1 - wCluster);
+      const knotScaleBase = lerp(1, 0.6, smooth((p - 0.16) / 0.14));
+      // Act5 pulse (0.66–0.83)
+      const a5 = clamp01((p - 0.66) / 0.17);
+      const pulse = Math.sin(a5 * Math.PI) * 0.25;
+      const a6 = clamp01((p - 0.83) / 0.17);
+      const knotScale = lerp(knotScaleBase, 0.5, a6) * (1 + pulse);
+      knot.position.set(knotX + cMX * 0.4, cMY * 0.4, 0);
+      knot.scale.setScalar(knotScale);
+      knot.rotation.x = t * 0.25;
+      knot.rotation.y = t * 0.35;
+      knotPos.copy(knot.position);
+
+      // ── Cubes ──
+      const scanActive = p > 0.30 && p < 0.52;
+      const scanY = lerp(4.5, -4.5, smooth((p - 0.33) / 0.17));
+      scanPlane.position.y = scanY;
+      scanMat.opacity = scanActive ? lerp(0, 0.9, Math.sin(clamp01((p - 0.33) / 0.17) * Math.PI)) : 0;
+
+      // Colors only need re-upload while scanning, or once when it ends.
+      const resetColors = !scanActive && wasScan;
+      let colorsTouched = false;
+
+      for (let i = 0; i < COUNT; i++) {
+        const d = data[i];
+        // base position: cloud → column → orbit
+        tmp.copy(d.cloud).lerp(d.column, wColumn);
+        if (wCluster > 0) {
+          const a = d.orbitA + t * d.orbitS;
+          const ox = Math.cos(a) * d.orbitR + knotPos.x;
+          const oy = d.orbitY + Math.sin(a * 1.3) * 0.3 + knotPos.y;
+          const oz = Math.sin(a) * d.orbitR;
+          tmp.x = lerp(tmp.x, ox, wCluster);
+          tmp.y = lerp(tmp.y, oy, wCluster);
+          tmp.z = lerp(tmp.z, oz, wCluster);
         }
-        posAttr.needsUpdate = true;
-        geo.computeVertexNormals();
+        // gentle float
+        tmp.y += Math.sin(t * 0.8 + d.floatPh) * 0.05 * (1 - wCluster);
+
+        dummy.position.copy(tmp);
+        dummy.rotation.set(t * d.spin.x * 60, t * d.spin.y * 60, t * d.spin.z * 60);
+        dummy.scale.setScalar(lerp(1, 0.85, wCluster));
+        dummy.updateMatrix();
+        cubes.setMatrixAt(i, dummy.matrix);
+
+        if (scanActive) {
+          const near = 1 - clamp01(Math.abs(tmp.y - scanY) / 0.7);
+          d.color.copy(d.base).lerp(WHITE, near * 0.8);
+          cubes.setColorAt(i, d.color);
+          colorsTouched = true;
+        } else if (resetColors) {
+          cubes.setColorAt(i, d.base);
+          colorsTouched = true;
+        }
+      }
+      cubes.instanceMatrix.needsUpdate = true;
+      if (colorsTouched) cubes.instanceColor.needsUpdate = true;
+      wasScan = scanActive;
+
+      // ── Connection lines (Act 4) ──
+      const lineOn = clamp01((p - 0.50) / 0.12);
+      lineMat.opacity = lineOn * 0.4 * (1 - a6);
+      if (lineMat.opacity > 0.01) {
+        for (let i = 0; i < LINE_N; i++) {
+          const d = data[i];
+          const a = d.orbitA + t * d.orbitS;
+          const ox = Math.cos(a) * d.orbitR + knotPos.x;
+          const oy = d.orbitY + knotPos.y;
+          const oz = Math.sin(a) * d.orbitR;
+          linePos.set([ox, oy, oz, knotPos.x, knotPos.y, knotPos.z], i * 6);
+        }
+        lineGeo.attributes.position.needsUpdate = true;
       }
 
-      /* Satellite morphing + orbit */
-      satellites.forEach((s, idx) => {
-        const angle = t * s.speed + s.phase;
-        const x = Math.cos(angle) * s.radius;
-        const y = Math.sin(angle * 0.7) * s.radius * Math.sin(s.incl);
-        const z = Math.sin(angle) * s.radius;
-        s.blob.position.set(x + currentMX * 0.8, y + currentMY * 0.8, z);
-
-        const geo = s.blob.geometry;
-        const posAttr = geo.attributes.position;
-        const orig = geo.userData.origPos;
-        const normals = geo.attributes.normal;
-        for (let i = 0; i < posAttr.count; i++) {
-          const ox = orig[i * 3], oy = orig[i * 3 + 1], oz = orig[i * 3 + 2];
-          const nx = normals.getX(i), ny = normals.getY(i), nz = normals.getZ(i);
-          const disp = Math.sin(t * 0.5 + ox * 3 + idx) * 0.15;
-          posAttr.setXYZ(i, ox + nx * disp, oy + ny * disp, oz + nz * disp);
-        }
-        posAttr.needsUpdate = true;
-        geo.computeVertexNormals();
-      });
-
-      /* Central blob mouse parallax */
-      centralBlob.position.set(currentMX * 0.8, currentMY * 0.8, 0);
-      centralBlob.rotation.y = t * 0.08;
-      centralBlob.rotation.x = t * 0.05;
-
-      /* Update particle positions */
-      const pPos = particleGeo.attributes.position.array;
-      for (let i = 0; i < PARTICLE_COUNT; i++) {
-        const particleT = pParams[i * 2];
-        const stream    = pParams[i * 2 + 1];
-        const [px, py, pz] = streamPos(stream, particleT, t);
-        pPos[i * 3]     = px;
-        pPos[i * 3 + 1] = py;
-        pPos[i * 3 + 2] = pz;
+      // ── Shockwave + gold particles (Act 5) ──
+      ringMat.opacity = Math.sin(a5 * Math.PI) * 0.6;
+      ring.scale.setScalar(lerp(0.3, 3.2, a5));
+      ring.position.copy(knotPos);
+      ring.rotation.x = Math.PI / 2.4;
+      gpMat.opacity = Math.sin(a5 * Math.PI) * 0.9;
+      for (let i = 0; i < GP; i++) {
+        const reach = a5 * (2 + (i % 5) * 0.5);
+        gpPos.set([
+          knotPos.x + gpDir[i].x * reach,
+          knotPos.y + gpDir[i].y * reach,
+          knotPos.z + gpDir[i].z * reach,
+        ], i * 3);
       }
-      particleGeo.attributes.position.needsUpdate = true;
+      gpGeo.attributes.position.needsUpdate = true;
 
-      /* Lights breathe */
-      amberLight.intensity = 2.5 + Math.sin(t * 0.7) * 0.8;
-      tealLight.intensity  = 1.5 + Math.sin(t * 0.5 + 1) * 0.7;
+      // Lights breathe
+      amberLight.intensity = 2 + Math.sin(t * 0.7) * 0.6;
+      tealLight.intensity = 1.5 + Math.sin(t * 0.5 + 1) * 0.5;
 
       renderer.render(scene, camera);
     };
     animId = requestAnimationFrame(animate);
 
-    /* ── Cleanup ───────────────────────────────────────────── */
+    /* ── Cleanup ── */
     return () => {
+      running = false;
       cancelAnimationFrame(animId);
-      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mousemove', onMouse);
       window.removeEventListener('resize', onResize);
-
-      centralBlob.geometry.dispose();
-      centralBlob.material.dispose();
-      satellites.forEach(s => { s.blob.geometry.dispose(); s.blob.material.dispose(); });
-      particleGeo.dispose();
-      particleMat.dispose();
+      knotGeo.dispose(); knotMat.dispose();
+      cubeGeo.dispose(); cubeMat.dispose(); cubes.dispose();
+      scanGeo.dispose(); scanMat.dispose();
+      lineGeo.dispose(); lineMat.dispose();
+      ringGeo.dispose(); ringMat.dispose();
+      gpGeo.dispose(); gpMat.dispose();
       renderer.dispose();
       if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
     };
@@ -356,7 +339,8 @@ export default function ThreeBackground() {
   return (
     <div
       ref={ref}
-      style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}
+      className="s-three"
+      style={{ background: 'radial-gradient(ellipse 60% 50% at 50% 40%, rgba(249,115,22,0.04), transparent 70%)' }}
     />
   );
 }
